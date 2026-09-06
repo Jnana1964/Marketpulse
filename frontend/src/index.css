@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+/*
+ * MarketPulse color system — a premium dark interface (spec section 24).
+ * Green/red are reserved for market state, never used decoratively.
+ */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-bg: #0a0d0c;
+  --color-surface: #0d100f;
+  --color-card: #111514;
+  --color-card-alt: #14201d;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-accent: rgba(45, 212, 191, 0.22);
+
+  --color-text: #ffffff;
+  --color-text-secondary: #a1a1a1;
+  --color-text-muted: #666666;
+
+  /* Teal is MarketPulse's single brand hue — used for the logo, primary
+     actions and positive market movement alike, matching the approved
+     visual design. Red and amber stay reserved for negative/warning
+     market states only. */
+  --color-positive: #2dd4bf;
+  --color-positive-soft: rgba(45, 212, 191, 0.12);
+  --color-negative: #ef4444;
+  --color-negative-soft: rgba(239, 68, 68, 0.14);
+  --color-warning: #f59e0b;
+  --color-warning-soft: rgba(245, 158, 11, 0.14);
+  --color-accent: #2dd4bf;
+  --color-accent-hover: #5eead4;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Soft radial brand glow used behind hero/dashboard surfaces. */
+.bg-brand-glow {
+  background-image:
+    radial-gradient(ellipse 60% 40% at 15% 0%, rgba(45, 212, 191, 0.08), transparent 60%),
+    radial-gradient(ellipse 50% 35% at 100% 20%, rgba(45, 212, 191, 0.05), transparent 60%);
+}
+
+/* Financial figures should align, not jitter, when values refresh. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-entrance {
+  animation: fade-in-up 0.25s ease-out both;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}

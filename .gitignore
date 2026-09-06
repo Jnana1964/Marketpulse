@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Environment variables - NEVER PUSH
+.env
+.env.*
+frontend/.env
+backend/.env
+
+# Build files
+dist/
+build/
+frontend/dist/
+
+# Logs
+*.log
+
+# Database
+backend/*.sqlite
+*.sqlite
