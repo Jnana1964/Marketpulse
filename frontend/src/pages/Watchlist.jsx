@@ -12,12 +12,12 @@ import { formatTimeShort } from '../utils/formatTime';
 
 function StatCard({ icon: Icon, value, label }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-4">
-      <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-[var(--color-positive-soft)] text-[var(--color-positive)]">
-        <Icon size={18} />
+    <div className="flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5">
+      <span className="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
+        <Icon size={19} />
       </span>
       <div className="min-w-0">
-        <p className="truncate text-lg font-bold text-white">{value}</p>
+        <p className="truncate text-xl font-bold text-white">{value}</p>
         <p className="truncate text-xs text-[var(--color-text-muted)]">{label}</p>
       </div>
     </div>
@@ -58,17 +58,17 @@ export function Watchlist() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-8">
+    <main className="mx-auto w-full max-w-[1680px] flex-1 px-4 py-8 sm:px-8 lg:px-12 xl:px-16">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Your Watchlist</p>
-          <h1 className="mt-1 text-2xl font-extrabold text-white sm:text-3xl">The stocks you care about.</h1>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">We keep track of meaningful changes, so you don't have to.</p>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Your Watchlist</p>
+          <h1 className="mt-1 text-3xl font-extrabold text-white sm:text-4xl">The stocks you care about.</h1>
+          <p className="mt-1 text-base text-[var(--color-text-secondary)]">We keep track of meaningful changes, so you don't have to.</p>
         </div>
         <button
           onClick={() => setShowSearch(true)}
           disabled={!watchlistId}
-          className="flex items-center gap-1.5 rounded-lg bg-[var(--color-positive)] px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-4 py-2.5 text-sm font-semibold text-[#071011] transition hover:bg-[var(--color-brand-hover)] disabled:opacity-50"
         >
           <Plus size={16} /> Add to Watchlist
         </button>
@@ -100,7 +100,7 @@ export function Watchlist() {
             action={
               <button
                 onClick={() => setShowSearch(true)}
-                className="mt-2 rounded-lg bg-[var(--color-positive)] px-4 py-2 text-xs font-semibold text-black hover:opacity-90"
+                className="mt-2 rounded-lg bg-[var(--color-brand)] px-4 py-2 text-xs font-semibold text-[#071011] hover:bg-[var(--color-brand-hover)]"
               >
                 Add your first stock
               </button>
@@ -121,14 +121,14 @@ export function Watchlist() {
             <WatchlistTable rows={rows} onRemove={handleRemove} />
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--color-positive-soft)] bg-[var(--color-card-alt)] p-5">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--color-border-accent)] bg-[var(--color-card-alt)] p-5">
             <div>
               <p className="text-sm font-semibold text-white">Add more stocks to your watchlist</p>
               <p className="text-xs text-[var(--color-text-secondary)]">Track the companies you care about and get notified when something meaningful happens.</p>
             </div>
             <button
               onClick={() => setShowSearch(true)}
-              className="flex flex-none items-center gap-1.5 rounded-lg bg-[var(--color-positive)] px-4 py-2.5 text-xs font-semibold text-black transition hover:opacity-90"
+              className="flex flex-none items-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-4 py-2.5 text-xs font-semibold text-[#071011] transition hover:bg-[var(--color-brand-hover)]"
             >
               <Plus size={14} /> Add Stock
             </button>

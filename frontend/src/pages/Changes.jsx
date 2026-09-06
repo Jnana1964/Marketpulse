@@ -31,16 +31,16 @@ export function Changes() {
   const latest = data?.changes?.[0];
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:px-8">
+    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-8 lg:px-12">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Since Your Last Visit</p>
-          <h1 className="mt-1 text-2xl font-extrabold text-white sm:text-3xl">Here's what's changed.</h1>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">A simple view of the meaningful changes in your watchlist.</p>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Since Your Last Visit</p>
+          <h1 className="mt-1 text-3xl font-extrabold text-white sm:text-4xl">Here's what's changed.</h1>
+          <p className="mt-1 text-base text-[var(--color-text-secondary)]">A simple view of the meaningful changes in your watchlist.</p>
         </div>
         <div className="text-right">
           <p className="text-xs text-[var(--color-text-muted)]">Last checked</p>
-          <button onClick={refresh} className="text-sm font-semibold text-white hover:text-[var(--color-positive)]">
+          <button onClick={refresh} className="text-sm font-semibold text-white hover:text-[var(--color-brand)]">
             {latest ? formatTimeShort(latest.detected_at) : '—'}
           </button>
         </div>
@@ -53,7 +53,7 @@ export function Changes() {
             onClick={() => setPriority(f.key)}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
               priority === f.key
-                ? 'bg-[var(--color-positive)] text-black'
+                ? 'bg-[var(--color-brand)] text-[#071011]'
                 : 'bg-white/5 text-[var(--color-text-secondary)] hover:text-white'
             }`}
           >
@@ -68,7 +68,7 @@ export function Changes() {
             onClick={() => setTime(f.key)}
             className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
               time === f.key
-                ? 'border-[var(--color-positive)]/40 text-[var(--color-positive)]'
+                ? 'border-[var(--color-brand)]/40 text-[var(--color-brand)]'
                 : 'border-transparent text-[var(--color-text-muted)] hover:text-white'
             }`}
           >
@@ -107,7 +107,7 @@ export function Changes() {
 
       {data && data.changes.length > 0 && (
         <div className="mt-5 flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-card-alt)] p-5">
-          <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--color-positive-soft)] text-[var(--color-positive)]">
+          <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
             <Bell size={16} />
           </span>
           <div>

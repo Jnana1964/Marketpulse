@@ -18,7 +18,7 @@ export function StockCard({ instrument, onAdd, disabled }) {
         type="button"
         disabled={disabled}
         onClick={() => onAdd(instrument)}
-        className="flex flex-none items-center gap-1 rounded-lg bg-[var(--color-positive)] px-3 py-1.5 text-xs font-semibold text-black transition hover:opacity-90 disabled:opacity-40"
+        className="flex flex-none items-center gap-1 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-xs font-semibold text-[#071011] transition hover:bg-[var(--color-brand-hover)] disabled:opacity-40"
       >
         <Plus size={13} /> Add
       </button>

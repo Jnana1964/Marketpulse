@@ -22,11 +22,11 @@ export function History() {
   }, [selected]);
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-8">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Your Market History</p>
-      <h1 className="mt-1 text-2xl font-extrabold text-white sm:text-3xl">A record of every time you've checked in.</h1>
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8 lg:px-12">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Your Market History</p>
+      <h1 className="mt-1 text-3xl font-extrabold text-white sm:text-4xl">A record of every time you've checked in.</h1>
 
-      <div className="mt-6 gap-6 lg:grid lg:grid-cols-[280px_1fr]">
+      <div className="mt-6 gap-6 lg:grid lg:grid-cols-[300px_1fr]">
         <section>
           {loading && !checks && (
             <div className="space-y-2">
@@ -47,7 +47,7 @@ export function History() {
                     onClick={() => setSelected(check.snapshotTime)}
                     className={`w-full rounded-xl border px-4 py-3 text-left transition ${
                       selected === check.snapshotTime
-                        ? 'border-[var(--color-positive)]/40 bg-[var(--color-positive-soft)]'
+                        ? 'border-[var(--color-brand)]/40 bg-[var(--color-brand-soft)]'
                         : 'border-[var(--color-border)] bg-[var(--color-card)] hover:border-white/20'
                     }`}
                   >

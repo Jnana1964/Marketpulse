@@ -59,21 +59,21 @@ export function StockSearchPage() {
   const added = new Set([...existingSymbols, ...justAdded]);
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-8">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Stock Search</p>
-      <h1 className="mt-1 text-2xl font-extrabold text-white sm:text-3xl">Look up any company.</h1>
-      <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-8 lg:px-12">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Stock Search</p>
+      <h1 className="mt-1 text-3xl font-extrabold text-white sm:text-4xl">Look up any company.</h1>
+      <p className="mt-1 text-base text-[var(--color-text-secondary)]">
         Search MarketPulse's supported NSE stock universe and add what you want to track.
       </p>
 
-      <div className="mt-6 flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
-        <Search size={16} className="text-[var(--color-text-muted)]" />
+      <div className="mt-6 flex h-14 max-w-[700px] items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 focus-within:border-[var(--color-brand)]/50">
+        <Search size={18} className="text-[var(--color-text-muted)]" />
         <input
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by symbol or company name, e.g. RELIANCE or Infosys"
-          className="w-full bg-transparent text-sm text-white placeholder:text-[var(--color-text-muted)] focus:outline-none"
+          placeholder="Search by company name or stock symbol..."
+          className="w-full bg-transparent text-base text-white placeholder:text-[var(--color-text-muted)] focus:outline-none"
         />
       </div>
 
@@ -118,8 +118,8 @@ export function StockSearchPage() {
                     onClick={() => handleAdd(instrument)}
                     className={`flex flex-none items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed ${
                       isAdded
-                        ? 'bg-[var(--color-positive-soft)] text-[var(--color-positive)]'
-                        : 'bg-[var(--color-positive)] text-black hover:opacity-90 disabled:opacity-50'
+                        ? 'bg-[var(--color-brand-soft)] text-[var(--color-brand)]'
+                        : 'bg-[var(--color-brand)] text-[#071011] hover:bg-[var(--color-brand-hover)] disabled:opacity-50'
                     }`}
                   >
                     {isAdded ? (

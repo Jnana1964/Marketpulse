@@ -10,8 +10,8 @@ function initials(name) {
 
 function Section({ title, children }) {
   return (
-    <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 sm:p-6">
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
+    <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 sm:p-7">
+      <h3 className="text-base font-semibold text-white">{title}</h3>
       <div className="mt-4 space-y-4">{children}</div>
     </section>
   );
@@ -21,7 +21,7 @@ function Toggle({ checked, onChange }) {
   return (
     <button
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-11 rounded-full transition ${checked ? 'bg-[var(--color-positive)]' : 'bg-white/10'}`}
+      className={`relative h-6 w-11 rounded-full transition ${checked ? 'bg-[var(--color-brand)]' : 'bg-white/10'}`}
     >
       <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${checked ? 'left-5' : 'left-0.5'}`} />
     </button>
@@ -54,15 +54,19 @@ export function Settings() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 space-y-5 px-4 py-6 sm:px-8">
+    <main className="mx-auto w-full max-w-3xl flex-1 space-y-5 px-4 py-8 sm:px-8 lg:px-12">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold text-white">Settings</h1>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Preferences</p>
+          <h1 className="mt-1 text-3xl font-extrabold text-white">Settings</h1>
+          <p className="mt-1 text-base text-[var(--color-text-secondary)]">Manage your MarketPulse preferences.</p>
+        </div>
         {saving && <span className="text-xs text-[var(--color-text-muted)]">Saving…</span>}
       </div>
 
-      <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 sm:p-6">
+      <Section title="Account">
         <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-[var(--color-positive-soft)] text-base font-bold text-[var(--color-positive)]">
+          <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-[var(--color-brand-soft)] text-base font-bold text-[var(--color-brand)]">
             {initials(user?.name)}
           </span>
           <div>
@@ -87,13 +91,13 @@ export function Settings() {
             className="mt-1 w-full cursor-not-allowed rounded-lg border border-[var(--color-border)] bg-black/20 px-3 py-2.5 text-sm text-white opacity-80"
           />
         </label>
-      </section>
+      </Section>
 
       {!settings ? (
         <div className="h-40 animate-pulse rounded-2xl bg-white/[0.04]" />
       ) : (
         <>
-          <Section title="Data Refresh">
+          <Section title="Notifications &amp; Data Refresh">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-white">Auto refresh</p>
@@ -109,7 +113,7 @@ export function Settings() {
                     key={secs}
                     onClick={() => save({ refreshIntervalSeconds: secs })}
                     className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                      settings.refreshIntervalSeconds === secs ? 'bg-[var(--color-positive)] text-black' : 'bg-white/5 text-[var(--color-text-secondary)]'
+                      settings.refreshIntervalSeconds === secs ? 'bg-[var(--color-brand)] text-[#071011]' : 'bg-white/5 text-[var(--color-text-secondary)]'
                     }`}
                   >
                     {secs} seconds
@@ -129,7 +133,7 @@ export function Settings() {
                   key={level}
                   onClick={() => save({ changeSensitivity: level })}
                   className={`flex-1 rounded-lg py-2 text-xs font-semibold capitalize transition ${
-                    settings.changeSensitivity === level ? 'bg-[var(--color-positive)] text-black' : 'bg-white/5 text-[var(--color-text-secondary)]'
+                    settings.changeSensitivity === level ? 'bg-[var(--color-brand)] text-[#071011]' : 'bg-white/5 text-[var(--color-text-secondary)]'
                   }`}
                 >
                   {level.toLowerCase()}

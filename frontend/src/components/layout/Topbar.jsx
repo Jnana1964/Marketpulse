@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, Sun, ChevronDown, Settings as SettingsIcon, LogOut } from 'lucide-react';
+import { Menu, Search, Bell, ChevronDown, Settings as SettingsIcon, LogOut } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { searchStocks } from '../../api/watchlistApi';
 
@@ -49,9 +49,9 @@ function GlobalSearch() {
   }
 
   return (
-    <div ref={boxRef} className="relative w-full max-w-md">
-      <div className="flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3.5 py-2.5">
-        <Search size={16} className="flex-none text-[var(--color-text-muted)]" />
+    <div ref={boxRef} className="relative w-full max-w-[520px]">
+      <div className="flex h-12 items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-4">
+        <Search size={17} className="flex-none text-[var(--color-text-muted)]" />
         <input
           value={query}
           onChange={(e) => {
@@ -63,7 +63,7 @@ function GlobalSearch() {
             if (e.key === 'Enter' && results[0]) goTo(results[0].symbol);
           }}
           placeholder="Search a stock or company…"
-          className="w-full bg-transparent text-sm text-white placeholder:text-[var(--color-text-muted)] focus:outline-none"
+          className="w-full bg-transparent text-base text-white placeholder:text-[var(--color-text-muted)] focus:outline-none"
         />
       </div>
       {open && results.length > 0 && (
@@ -99,7 +99,7 @@ export function Topbar({ onMenuClick }) {
   }, []);
 
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 px-4 py-3.5 backdrop-blur sm:px-8">
+    <header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 px-4 backdrop-blur sm:px-8">
       <button
         onClick={onMenuClick}
         className="rounded-lg p-1.5 text-[var(--color-text-secondary)] hover:bg-white/5 lg:hidden"
@@ -108,7 +108,7 @@ export function Topbar({ onMenuClick }) {
         <Menu size={20} />
       </button>
 
-      <div className="hidden flex-1 justify-center sm:flex">
+      <div className="hidden flex-1 sm:flex">
         <GlobalSearch />
       </div>
       <div className="flex flex-1 sm:hidden" />
@@ -120,14 +120,7 @@ export function Topbar({ onMenuClick }) {
           title="What's changed"
           className="rounded-lg p-2 text-[var(--color-text-secondary)] transition hover:bg-white/5 hover:text-white"
         >
-          <Bell size={18} />
-        </button>
-        <button
-          aria-label="Toggle theme"
-          title="MarketPulse is designed for dark environments"
-          className="rounded-lg p-2 text-[var(--color-text-secondary)] transition hover:bg-white/5 hover:text-white"
-        >
-          <Sun size={18} />
+          <Bell size={20} />
         </button>
 
         <div ref={menuRef} className="relative">
@@ -135,11 +128,11 @@ export function Topbar({ onMenuClick }) {
             onClick={() => setMenuOpen((v) => !v)}
             className="flex items-center gap-2 rounded-lg py-1 pl-1 pr-1.5 transition hover:bg-white/5"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-positive-soft)] text-xs font-bold text-[var(--color-positive)]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-brand-soft)] text-xs font-bold text-[var(--color-brand)]">
               {initials(user?.name)}
             </span>
-            <span className="hidden text-sm font-medium text-white sm:inline">{user?.name?.split(' ')[0]}</span>
-            <ChevronDown size={14} className="hidden text-[var(--color-text-muted)] sm:inline" />
+            <span className="hidden text-base font-medium text-white sm:inline">{user?.name?.split(' ')[0]}</span>
+            <ChevronDown size={15} className="hidden text-[var(--color-text-muted)] sm:inline" />
           </button>
 
           {menuOpen && (
