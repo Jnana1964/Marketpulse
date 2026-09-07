@@ -81,13 +81,12 @@ const config = {
    */
 
   groww: {
-    baseUrl: 'https://api.groww.in/v1',
+  baseUrl: 'https://api.groww.in/v1',
 
-    apiKey: process.env.GROWW_API_KEY || '',
+  apiKey: process.env.GROW_API_KEY || '',
 
-    apiSecret: process.env.GROWW_API_SECRET || '',
-  },
-
+  apiSecret: process.env.GROW_API_SECRET || '',
+},
 
   /*
    * Background market polling.
