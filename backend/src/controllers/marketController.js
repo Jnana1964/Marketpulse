@@ -13,9 +13,43 @@ const { assertOwnedWatchlist } = require('./watchlistController');
  * it can be curled directly during setup.
  */
 const testConnection = asyncHandler(async (req, res) => {
+  const config = require('../config/env');
+  const groww = require('../services/growwService');
+
   const mode = marketDataService.getMode();
-  const sample = await marketDataService.getQuote({ symbol: 'RELIANCE', exchange: 'NSE' });
-  return ok(res, { mode, sample });
+
+  try {
+    const quote = await groww.getQuote({
+      symbol: 'RELIANCE',
+      exchange: 'NSE',
+      segment: 'CASH',
+    });
+
+    return ok(res, {
+      mode,
+      growwConnection: {
+        success: true,
+        message: 'Successfully connected to Groww API.',
+      },
+      quote,
+    });
+  } catch (error) {
+    return res.status(502).json({
+      success: false,
+      message: 'Groww API connection failed.',
+      data: {
+        mode,
+        tokenConfigured: Boolean(config.groww.authToken),
+        baseUrl: config.groww.baseUrl,
+        error: {
+          name: error.name,
+          code: error.code || null,
+          message: error.message,
+          status: error.status || null,
+        },
+      },
+    });
+  }
 });
 
 const getQuote = asyncHandler(async (req, res) => {
