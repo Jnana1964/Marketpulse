@@ -2,6 +2,7 @@ const createApp = require('./app');
 const config = require('./config/env');
 const logger = require('./utils/logger');
 const marketSnapshotJob = require('./jobs/marketSnapshotJob');
+const pool = require('./config/db');
 
 if (require.main === module) {
   const app = createApp();
