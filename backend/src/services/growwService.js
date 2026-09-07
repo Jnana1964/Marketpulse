@@ -1,118 +1,114 @@
+/**
+ * Groww API integration.
+ *
+ * This is the ONLY service that communicates directly
+ * with the Groww API.
+ *
+ * Authentication flow:
+ *
+ * 1. API Key + API Secret
+ * 2. Generate timestamp
+ * 3. SHA256(API_SECRET + timestamp)
+ * 4. POST /token/api/access
+ * 5. Receive access token
+ * 6. Use access token for market API requests
+ */
+
 const axios = require('axios');
 const crypto = require('crypto');
+
 const config = require('../config/env');
+
+
+/* =========================================================
+   CUSTOM ERRORS
+========================================================= */
 
 class ProviderError extends Error {
   constructor(message, code) {
     super(message);
+
     this.name = 'ProviderError';
     this.code = code;
   }
 }
 
+
 class ProviderConfigError extends ProviderError {
   constructor(message) {
     super(message, 'PROVIDER_CONFIG_ERROR');
+
     this.name = 'ProviderConfigError';
   }
 }
 
+
 class ProviderAuthError extends ProviderError {
   constructor(message) {
     super(message, 'PROVIDER_AUTH_ERROR');
+
     this.name = 'ProviderAuthError';
   }
 }
 
+
 class ProviderRateLimitError extends ProviderError {
   constructor(message) {
     super(message, 'PROVIDER_RATE_LIMIT');
+
     this.name = 'ProviderRateLimitError';
   }
 }
 
+
 class ProviderHttpError extends ProviderError {
   constructor(message, status) {
     super(message, 'PROVIDER_HTTP_ERROR');
+
     this.name = 'ProviderHttpError';
     this.status = status;
   }
 }
 
+
 class ProviderNetworkError extends ProviderError {
   constructor(message) {
     super(message, 'PROVIDER_NETWORK_ERROR');
+
     this.name = 'ProviderNetworkError';
   }
 }
 
+
 class ProviderResponseError extends ProviderError {
   constructor(message) {
     super(message, 'PROVIDER_RESPONSE_ERROR');
+
     this.name = 'ProviderResponseError';
   }
 }
 
 
+/* =========================================================
+   ACCESS TOKEN CACHE
+========================================================= */
+
 /*
-|--------------------------------------------------------------------------
-| ACCESS TOKEN CACHE
-|--------------------------------------------------------------------------
-|
-| Groww API Key + Secret are used to generate an access token.
-| We keep that token in memory and reuse it.
-|
-*/
+ * Access tokens are cached in memory.
+ *
+ * This prevents generating a new token for every request.
+ */
 
 let accessToken = null;
+
 let tokenExpiry = null;
 
-
-/*
-|--------------------------------------------------------------------------
-| BASE HTTP CLIENT
-|--------------------------------------------------------------------------
-*/
-
-function baseClient() {
-  return axios.create({
-    baseURL: config.groww.baseUrl,
-    timeout: 10000,
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'X-API-VERSION': '1.0',
-    },
-  });
-}
+let tokenPromise = null;
 
 
-/*
-|--------------------------------------------------------------------------
-| GENERATE CHECKSUM
-|--------------------------------------------------------------------------
-|
-| Groww documentation:
-|
-| SHA256(API_SECRET + TIMESTAMP)
-|
-*/
-
-function generateChecksum(secret, timestamp) {
-  const input = `${secret}${timestamp}`;
-
-  return crypto
-    .createHash('sha256')
-    .update(input)
-    .digest('hex');
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| CHECK CREDENTIALS
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   VALIDATE CONFIGURATION
+========================================================= */
 
 function validateCredentials() {
   if (!config.groww.apiKey) {
@@ -129,11 +125,50 @@ function validateCredentials() {
 }
 
 
+/* =========================================================
+   BASE CLIENT
+========================================================= */
+
+function createBaseClient() {
+  return axios.create({
+    baseURL: config.groww.baseUrl,
+
+    timeout: 10000,
+
+    headers: {
+      Accept: 'application/json',
+
+      'Content-Type': 'application/json',
+
+      'X-API-VERSION': '1.0',
+    },
+  });
+}
+
+
+/* =========================================================
+   GENERATE CHECKSUM
+========================================================= */
+
 /*
-|--------------------------------------------------------------------------
-| CHECK TOKEN VALIDITY
-|--------------------------------------------------------------------------
-*/
+ * Groww checksum:
+ *
+ * SHA256(API_SECRET + TIMESTAMP)
+ */
+
+function generateChecksum(secret, timestamp) {
+  const input = `${secret}${timestamp}`;
+
+  return crypto
+    .createHash('sha256')
+    .update(input, 'utf8')
+    .digest('hex');
+}
+
+
+/* =========================================================
+   TOKEN VALIDITY
+========================================================= */
 
 function hasValidToken() {
   if (!accessToken || !tokenExpiry) {
@@ -141,38 +176,60 @@ function hasValidToken() {
   }
 
   /*
-   | Refresh slightly before expiry.
+   * Refresh one minute before expiry.
    */
 
   return Date.now() < tokenExpiry - 60 * 1000;
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| GENERATE ACCESS TOKEN
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   CLEAR TOKEN
+========================================================= */
 
-async function generateAccessToken() {
+function clearAccessToken() {
+  accessToken = null;
+
+  tokenExpiry = null;
+
+  tokenPromise = null;
+}
+
+
+/* =========================================================
+   GENERATE ACCESS TOKEN
+========================================================= */
+
+async function requestAccessToken() {
   validateCredentials();
 
   try {
+    /*
+     * Current Unix timestamp in seconds.
+     */
+
     const timestamp = Math.floor(
       Date.now() / 1000
     ).toString();
+
 
     const checksum = generateChecksum(
       config.groww.apiSecret,
       timestamp
     );
 
-    const response = await baseClient().post(
+
+    const client = createBaseClient();
+
+
+    const response = await client.post(
       '/token/api/access',
 
       {
         key_type: 'approval',
+
         checksum,
+
         timestamp,
       },
 
@@ -186,19 +243,29 @@ async function generateAccessToken() {
 
     const data = response.data;
 
+
     /*
-     | Groww response can contain token directly
-     | or inside payload.
+     * Expected Groww response:
+     *
+     * {
+     *   token: "...",
+     *   expiry: "..."
+     * }
+     *
+     * Also support payload wrapper defensively.
      */
 
-    const token =
-      data?.token ||
-      data?.payload?.token;
+    const responseData =
+      data?.payload ||
+      data;
 
 
-    if (!token) {
+    const token = responseData?.token;
+
+
+    if (!token || typeof token !== 'string') {
       throw new ProviderResponseError(
-        'Groww did not return an access token.'
+        'Groww did not return a valid access token.'
       );
     }
 
@@ -207,25 +274,29 @@ async function generateAccessToken() {
 
 
     /*
-     | If expiry is returned, use it.
-     | Otherwise keep token temporarily.
+     * Groww returns expiry as ISO date-time.
      */
 
-    const expiry =
-      data?.expiry ||
-      data?.payload?.expiry;
+    const expiry = responseData?.expiry;
 
 
     if (expiry) {
-      const parsedExpiry = new Date(expiry).getTime();
+      const expiryTime = new Date(expiry).getTime();
 
-      if (!Number.isNaN(parsedExpiry)) {
-        tokenExpiry = parsedExpiry;
-      } else {
-        tokenExpiry =
-          Date.now() + 5 * 60 * 60 * 1000;
+      if (!Number.isNaN(expiryTime)) {
+        tokenExpiry = expiryTime;
       }
-    } else {
+    }
+
+
+    /*
+     * Fallback expiry.
+     *
+     * This is only used if the API does not provide
+     * a parseable expiry.
+     */
+
+    if (!tokenExpiry) {
       tokenExpiry =
         Date.now() + 5 * 60 * 60 * 1000;
     }
@@ -234,37 +305,56 @@ async function generateAccessToken() {
     return accessToken;
 
   } catch (error) {
+    clearAccessToken();
+
     throw translateError(
       error,
-      'generating Groww access token'
+      'generating access token'
     );
   }
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| GET ACCESS TOKEN
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   GET ACCESS TOKEN
+========================================================= */
 
 async function getAccessToken() {
   if (hasValidToken()) {
     return accessToken;
   }
 
-  return generateAccessToken();
+
+  /*
+   * Prevent multiple simultaneous requests from generating
+   * multiple tokens.
+   */
+
+  if (tokenPromise) {
+    return tokenPromise;
+  }
+
+
+  tokenPromise = requestAccessToken();
+
+  try {
+    const token = await tokenPromise;
+
+    return token;
+
+  } finally {
+    tokenPromise = null;
+  }
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| AUTHENTICATED CLIENT
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   AUTHENTICATED CLIENT
+========================================================= */
 
-async function authenticatedClient() {
+async function createAuthenticatedClient() {
   const token = await getAccessToken();
+
 
   return axios.create({
     baseURL: config.groww.baseUrl,
@@ -284,28 +374,21 @@ async function authenticatedClient() {
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| ERROR TRANSLATION
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   ERROR TRANSLATION
+========================================================= */
 
 function translateError(error, context) {
-
   if (error instanceof ProviderError) {
     return error;
   }
 
 
   if (error.response) {
-
     const status = error.response.status;
 
 
-    if (
-      status === 401 ||
-      status === 403
-    ) {
+    if (status === 401 || status === 403) {
       return new ProviderAuthError(
         `Groww API authentication failed while ${context}.`
       );
@@ -339,34 +422,106 @@ function translateError(error, context) {
 }
 
 
+/* =========================================================
+   PARSE OHLC
+========================================================= */
+
 /*
-|--------------------------------------------------------------------------
-| NORMALIZE QUOTE
-|--------------------------------------------------------------------------
-*/
+ * Groww documentation may represent OHLC as an object
+ * or as a string depending on the response.
+ */
+
+function parseOhlc(ohlc) {
+  if (!ohlc) {
+    return {
+      open: null,
+      high: null,
+      low: null,
+      close: null,
+    };
+  }
+
+
+  /*
+   * Already an object.
+   */
+
+  if (
+    typeof ohlc === 'object' &&
+    !Array.isArray(ohlc)
+  ) {
+    return {
+      open: ohlc.open ?? null,
+
+      high: ohlc.high ?? null,
+
+      low: ohlc.low ?? null,
+
+      close: ohlc.close ?? null,
+    };
+  }
+
+
+  /*
+   * Handle string format.
+   */
+
+  if (typeof ohlc === 'string') {
+    const getValue = (name) => {
+      const regex = new RegExp(
+        `${name}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`,
+        'i'
+      );
+
+      const match = ohlc.match(regex);
+
+      return match
+        ? Number(match[1])
+        : null;
+    };
+
+
+    return {
+      open: getValue('open'),
+
+      high: getValue('high'),
+
+      low: getValue('low'),
+
+      close: getValue('close'),
+    };
+  }
+
+
+  return {
+    open: null,
+
+    high: null,
+
+    low: null,
+
+    close: null,
+  };
+}
+
+
+/* =========================================================
+   NORMALIZE QUOTE
+========================================================= */
 
 function normalizeQuote(
   symbol,
   exchange,
-  raw
+  rawResponse
 ) {
-
-  /*
-   | Groww may return data directly
-   | or inside payload.
-   */
-
-  const data =
-    raw?.payload ||
-    raw;
-
-
-  const lastPrice =
-    data?.last_price;
+  const raw =
+    rawResponse?.payload ||
+    rawResponse;
 
 
   if (
-    typeof lastPrice !== 'number'
+    !raw ||
+    typeof raw.last_price !== 'number'
   ) {
     throw new ProviderResponseError(
       `Malformed quote response for ${symbol}.`
@@ -374,72 +529,77 @@ function normalizeQuote(
   }
 
 
+  const ohlc = parseOhlc(raw.ohlc);
+
+
   return {
     symbol,
 
     exchange,
 
-    price: lastPrice,
+    price: raw.last_price,
 
-    previousClose:
-      data?.ohlc?.close ??
-      null,
+    previousClose: ohlc.close,
 
-    open:
-      data?.ohlc?.open ??
-      null,
+    open: ohlc.open,
 
-    high:
-      data?.ohlc?.high ??
-      null,
+    high: ohlc.high,
 
-    low:
-      data?.ohlc?.low ??
-      null,
+    low: ohlc.low,
 
-    volume:
-      data?.volume ??
-      null,
+    volume: raw.volume ?? null,
 
-    timestamp:
-      new Date().toISOString(),
+    timestamp: raw.last_trade_time
+      ? new Date(raw.last_trade_time).toISOString()
+      : new Date().toISOString(),
 
     source: 'groww',
 
     isLive: true,
+
+    dayChange: raw.day_change ?? null,
+
+    dayChangePercent:
+      raw.day_change_perc ?? null,
+
+    averagePrice:
+      raw.average_price ?? null,
+
+    week52High:
+      raw.week_52_high ?? null,
+
+    week52Low:
+      raw.week_52_low ?? null,
   };
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| GET QUOTE
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   GET QUOTE
+========================================================= */
 
 async function getQuote({
   exchange,
-  segment,
+  segment = 'CASH',
   symbol,
 }) {
-
   try {
+    const client =
+      await createAuthenticatedClient();
 
-    const api =
-      await authenticatedClient();
 
+    const response = await client.get(
+      '/live-data/quote',
+      {
+        params: {
+          exchange,
 
-    const response =
-      await api.get(
-        '/live-data/quote',
-        {
-          params: {
-            exchange,
-            segment,
-            trading_symbol: symbol,
-          },
-        }
-      );
+          segment,
+
+          trading_symbol: symbol,
+        },
+      }
+    );
 
 
     return normalizeQuote(
@@ -449,19 +609,15 @@ async function getQuote({
     );
 
   } catch (error) {
-
     /*
-     | If token expired,
-     | clear cached token.
+     * Clear token if authentication failed.
      */
 
     if (
       error.response?.status === 401 ||
       error.response?.status === 403
     ) {
-
-      accessToken = null;
-      tokenExpiry = null;
+      clearAccessToken();
     }
 
 
@@ -473,35 +629,38 @@ async function getQuote({
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| GET LTP
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   GET LTP
+========================================================= */
 
 async function getLtp({
-  segment,
+  segment = 'CASH',
   exchangeSymbols,
 }) {
-
   try {
+    if (
+      !Array.isArray(exchangeSymbols) ||
+      exchangeSymbols.length === 0
+    ) {
+      return {};
+    }
 
-    const api =
-      await authenticatedClient();
+
+    const client =
+      await createAuthenticatedClient();
 
 
-    const response =
-      await api.get(
-        '/live-data/ltp',
-        {
-          params: {
-            segment,
+    const response = await client.get(
+      '/live-data/ltp',
+      {
+        params: {
+          segment,
 
-            exchange_symbols:
-              exchangeSymbols.join(','),
-          },
-        }
-      );
+          exchange_symbols:
+            exchangeSymbols.join(','),
+        },
+      }
+    );
 
 
     return (
@@ -511,7 +670,6 @@ async function getLtp({
     );
 
   } catch (error) {
-
     throw translateError(
       error,
       'fetching LTP batch'
@@ -520,35 +678,38 @@ async function getLtp({
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| GET OHLC
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   GET OHLC
+========================================================= */
 
 async function getOhlc({
-  segment,
+  segment = 'CASH',
   exchangeSymbols,
 }) {
-
   try {
+    if (
+      !Array.isArray(exchangeSymbols) ||
+      exchangeSymbols.length === 0
+    ) {
+      return {};
+    }
 
-    const api =
-      await authenticatedClient();
+
+    const client =
+      await createAuthenticatedClient();
 
 
-    const response =
-      await api.get(
-        '/live-data/ohlc',
-        {
-          params: {
-            segment,
+    const response = await client.get(
+      '/live-data/ohlc',
+      {
+        params: {
+          segment,
 
-            exchange_symbols:
-              exchangeSymbols.join(','),
-          },
-        }
-      );
+          exchange_symbols:
+            exchangeSymbols.join(','),
+        },
+      }
+    );
 
 
     return (
@@ -558,7 +719,6 @@ async function getOhlc({
     );
 
   } catch (error) {
-
     throw translateError(
       error,
       'fetching OHLC batch'
@@ -567,50 +727,47 @@ async function getOhlc({
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| GET HISTORICAL CANDLES
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   GET HISTORICAL CANDLES
+========================================================= */
 
 async function getHistoricalCandles({
   exchange,
-  segment,
+
+  segment = 'CASH',
+
   symbol,
+
   startTime,
+
   endTime,
+
   intervalInMinutes,
 }) {
-
   try {
+    const client =
+      await createAuthenticatedClient();
 
-    const api =
-      await authenticatedClient();
 
+    const response = await client.get(
+      '/historical/candle/range',
+      {
+        params: {
+          exchange,
 
-    const response =
-      await api.get(
-        '/historical/candle/range',
-        {
-          params: {
-            exchange,
+          segment,
 
-            segment,
+          trading_symbol: symbol,
 
-            trading_symbol:
-              symbol,
+          start_time: startTime,
 
-            start_time:
-              startTime,
+          end_time: endTime,
 
-            end_time:
-              endTime,
-
-            interval_in_minutes:
-              intervalInMinutes,
-          },
-        }
-      );
+          interval_in_minutes:
+            intervalInMinutes,
+        },
+      }
+    );
 
 
     const data =
@@ -620,11 +777,8 @@ async function getHistoricalCandles({
 
     if (
       !data ||
-      !Array.isArray(
-        data.candles
-      )
+      !Array.isArray(data.candles)
     ) {
-
       throw new ProviderResponseError(
         `Malformed historical candle response for ${symbol}.`
       );
@@ -633,41 +787,52 @@ async function getHistoricalCandles({
 
     return data.candles.map(
       (candle) => {
+        const rawTimestamp =
+          candle[0];
 
-        const timestamp =
-          typeof candle[0] === 'number'
-            ? new Date(
-                candle[0] * 1000
-              ).toISOString()
-            : new Date(
-                candle[0]
-              ).toISOString();
+
+        let timestamp;
+
+
+        /*
+         * Historical API normally returns epoch seconds.
+         */
+
+        if (
+          typeof rawTimestamp === 'number'
+        ) {
+          timestamp = new Date(
+            rawTimestamp * 1000
+          ).toISOString();
+        } else {
+          timestamp = new Date(
+            rawTimestamp
+          ).toISOString();
+        }
 
 
         return {
           timestamp,
 
           open:
-            candle[1],
+            Number(candle[1]),
 
           high:
-            candle[2],
+            Number(candle[2]),
 
           low:
-            candle[3],
+            Number(candle[3]),
 
           close:
-            candle[4],
+            Number(candle[4]),
 
           volume:
             candle[5] ?? null,
         };
-
       }
     );
 
   } catch (error) {
-
     throw translateError(
       error,
       `fetching historical candles for ${symbol}`
@@ -676,29 +841,20 @@ async function getHistoricalCandles({
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| CONNECTION INFO
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   CONNECTION INFORMATION
+========================================================= */
 
 function getConnectionInfo() {
-
   return {
     apiKeyConfigured:
-      Boolean(
-        config.groww.apiKey
-      ),
+      Boolean(config.groww.apiKey),
 
     apiSecretConfigured:
-      Boolean(
-        config.groww.apiSecret
-      ),
+      Boolean(config.groww.apiSecret),
 
     accessTokenCached:
-      Boolean(
-        accessToken
-      ),
+      Boolean(accessToken),
 
     baseUrl:
       config.groww.baseUrl,
@@ -706,14 +862,35 @@ function getConnectionInfo() {
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| EXPORTS
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   TEST CONNECTION
+========================================================= */
+
+async function testConnection() {
+  const quote = await getQuote({
+    exchange: 'NSE',
+
+    segment: 'CASH',
+
+    symbol: 'RELIANCE',
+  });
+
+
+  return {
+    connected: true,
+
+    quote,
+
+    connection: getConnectionInfo(),
+  };
+}
+
+
+/* =========================================================
+   EXPORTS
+========================================================= */
 
 module.exports = {
-
   getQuote,
 
   getLtp,
@@ -725,6 +902,10 @@ module.exports = {
   getAccessToken,
 
   getConnectionInfo,
+
+  testConnection,
+
+  clearAccessToken,
 
   ProviderError,
 
