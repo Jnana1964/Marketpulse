@@ -20,10 +20,10 @@ function requireEnv(name, fallback) {
 const config = {
   env: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 5000),
-  corsAllowedOrigins: (process.env.CORS_ALLOWED_ORIGIN || 'http://localhost:5173')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  corsAllowedOrigins: (process.env.CORS_ALLOWED_ORIGINS || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean),
 
   db: {
     host: requireEnv('DB_HOST', 'localhost'),
