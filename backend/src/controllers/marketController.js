@@ -1,27 +1,45 @@
-const pool = require('../config/db');
+const pool = require(
+  '../config/db'
+);
 
-const asyncHandler =
-  require('../utils/asyncHandler');
+
+const asyncHandler = require(
+  '../utils/asyncHandler'
+);
+
 
 const {
   ok,
   fail,
-} = require('../utils/apiResponse');
+} = require(
+  '../utils/apiResponse'
+);
+
 
 const {
   ApiError,
-} = require('../middleware/errorMiddleware');
+} = require(
+  '../middleware/errorMiddleware'
+);
 
-const marketDataService =
-  require('../services/marketDataService');
+
+const marketDataService = require(
+  '../services/marketDataService'
+);
+
 
 const {
   findInstrument,
-} = require('../config/instrumentUniverse');
+} = require(
+  '../config/instrumentUniverse'
+);
+
 
 const {
   assertOwnedWatchlist,
-} = require('./watchlistController');
+} = require(
+  './watchlistController'
+);
 
 
 /* =========================================================
@@ -31,7 +49,8 @@ const {
 /**
  * Test Groww connection.
  *
- * This endpoint intentionally does NOT require authentication.
+ * This endpoint intentionally does NOT require
+ * application authentication.
  *
  * GET:
  *
@@ -41,7 +60,9 @@ const {
 const testConnection =
   asyncHandler(
     async (req, res) => {
+
       try {
+
         const result =
           await marketDataService
             .testLiveConnection();
@@ -53,34 +74,46 @@ const testConnection =
         );
 
       } catch (error) {
+
         return fail(
+
           res,
+
 
           'Groww API connection failed.',
 
+
           502,
 
+
           {
+
             mode:
               marketDataService
                 .getMode(),
 
+
             error: {
+
               name:
                 error.name,
+
 
               code:
                 error.code ||
                 'UNKNOWN_ERROR',
 
+
               message:
                 error.message,
+
 
               status:
                 error.status ||
                 null,
             },
           },
+
 
           error.code ||
           'PROVIDER_ERROR'
@@ -103,6 +136,7 @@ const testConnection =
 const getQuote =
   asyncHandler(
     async (req, res) => {
+
       const {
         symbol,
       } = req.params;
@@ -113,14 +147,20 @@ const getQuote =
 
 
       if (!instrument) {
+
         return fail(
+
           res,
+
 
           `${symbol} is not a supported instrument.`,
 
+
           404,
 
+
           null,
+
 
           'INSTRUMENT_NOT_SUPPORTED'
         );
@@ -130,11 +170,14 @@ const getQuote =
       const quote =
         await marketDataService
           .getQuote({
+
             symbol:
               instrument.symbol,
 
+
             exchange:
               instrument.exchange,
+
 
             segment:
               instrument.segment ||
@@ -143,8 +186,12 @@ const getQuote =
 
 
       return ok(
+
         res,
+
+
         {
+
           quote,
 
           instrument,
@@ -167,20 +214,26 @@ const getQuote =
 const getWatchlistMarketData =
   asyncHandler(
     async (req, res) => {
+
       const watchlist =
         await assertOwnedWatchlist(
+
           req.user.id,
+
           req.params.watchlistId
         );
 
 
       const [items] =
         await pool.query(
+
           `
           SELECT *
           FROM watchlist_items
           WHERE watchlist_id = :id
           `,
+
+
           {
             id:
               watchlist.id,
@@ -194,8 +247,12 @@ const getWatchlistMarketData =
 
 
       return ok(
+
         res,
+
+
         {
+
           watchlist,
 
           quotes,
@@ -218,6 +275,7 @@ const getWatchlistMarketData =
 const getStock =
   asyncHandler(
     async (req, res) => {
+
       const {
         symbol,
       } = req.params;
@@ -228,10 +286,14 @@ const getStock =
 
 
       if (!instrument) {
+
         throw new ApiError(
+
           `${symbol} is not a supported instrument.`,
 
+
           404,
+
 
           'INSTRUMENT_NOT_SUPPORTED'
         );
@@ -241,11 +303,14 @@ const getStock =
       const quote =
         await marketDataService
           .getQuote({
+
             symbol:
               instrument.symbol,
 
+
             exchange:
               instrument.exchange,
+
 
             segment:
               instrument.segment ||
@@ -254,8 +319,12 @@ const getStock =
 
 
       return ok(
+
         res,
+
+
         {
+
           instrument,
 
           quote,
@@ -285,6 +354,7 @@ const getStock =
 const getHistory =
   asyncHandler(
     async (req, res) => {
+
       const {
         symbol,
       } = req.params;
@@ -295,10 +365,14 @@ const getHistory =
 
 
       if (!instrument) {
+
         throw new ApiError(
+
           `${symbol} is not a supported instrument.`,
 
+
           404,
+
 
           'INSTRUMENT_NOT_SUPPORTED'
         );
@@ -306,10 +380,12 @@ const getHistory =
 
 
       const range =
+
         (
           req.query.range ||
           '1D'
-        ).toUpperCase();
+        )
+          .toUpperCase();
 
 
       const now =
@@ -317,37 +393,62 @@ const getHistory =
 
 
       const rangeConfig = {
-        '1D': {
-          hours: 7,
 
-          intervalMinutes: 15,
+        '1D': {
+
+          hours:
+            7,
+
+
+          intervalMinutes:
+            15,
         },
+
 
         '1W': {
-          hours: 24 * 7,
 
-          intervalMinutes: 60,
+          hours:
+            24 * 7,
+
+
+          intervalMinutes:
+            60,
         },
+
 
         '1M': {
-          hours: 24 * 30,
 
-          intervalMinutes: 240,
+          hours:
+            24 * 30,
+
+
+          intervalMinutes:
+            240,
         },
+
 
         '3M': {
-          hours: 24 * 90,
 
-          intervalMinutes: 1440,
+          hours:
+            24 * 90,
+
+
+          intervalMinutes:
+            1440,
         },
+
       }[range];
 
 
       if (!rangeConfig) {
+
         throw new ApiError(
+
           'Unsupported range. Use one of 1D, 1W, 1M, 3M.',
 
+
           422,
+
 
           'VALIDATION_ERROR'
         );
@@ -355,73 +456,96 @@ const getHistory =
 
 
       const startTime =
+
         new Date(
+
           now.getTime() -
+
           rangeConfig.hours *
+
             60 *
+
             60 *
+
             1000
         );
 
 
-      /*
-       * Format:
-       *
-       * YYYY-MM-DD HH:mm:ss
-       */
-
       const formatDateTime =
         (date) => {
+
           return date
+
             .toISOString()
+
             .slice(0, 19)
-            .replace('T', ' ');
+
+            .replace(
+              'T',
+              ' '
+            );
         };
 
 
       const result =
         await marketDataService
           .getHistoricalCandles({
+
             symbol:
               instrument.symbol,
+
 
             exchange:
               instrument.exchange,
 
+
             segment:
               instrument.segment ||
               'CASH',
+
 
             startTime:
               formatDateTime(
                 startTime
               ),
 
+
             endTime:
               formatDateTime(
                 now
               ),
 
+
             intervalInMinutes:
-              rangeConfig.intervalMinutes,
+              rangeConfig
+                .intervalMinutes,
           });
 
 
       return ok(
+
         res,
+
+
         {
+
           instrument,
 
+
           range,
+
 
           candles:
             result.candles,
 
+
           source:
             result.source,
 
+
           dataStatus:
             result.dataStatus,
+
 
           providerNote:
             result.providerNote ||
@@ -437,6 +561,7 @@ const getHistory =
 ========================================================= */
 
 module.exports = {
+
   testConnection,
 
   getQuote,
