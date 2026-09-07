@@ -28,73 +28,140 @@ function requireEnv(name, fallback) {
 
 
 const config = {
-  env: process.env.NODE_ENV || 'development',
 
-  port: Number(process.env.PORT || 5000),
+  env:
+    process.env.NODE_ENV ||
+    'development',
 
-  corsAllowedOrigins: (
-    process.env.CORS_ALLOWED_ORIGINS ||
-    'http://localhost:5173'
-  )
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean),
 
+  port:
+    Number(process.env.PORT || 5000),
+
+
+  corsAllowedOrigins:
+    (
+      process.env.CORS_ALLOWED_ORIGINS ||
+      'http://localhost:5173'
+    )
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+
+
+  /* =========================================================
+     DATABASE
+  ========================================================= */
 
   db: {
-    host: requireEnv('DB_HOST', 'localhost'),
 
-    port: Number(process.env.DB_PORT || 3306),
+    host:
+      requireEnv(
+        'DB_HOST',
+        'localhost'
+      ),
 
-    user: requireEnv('DB_USER', 'root'),
 
-    password: process.env.DB_PASSWORD || '',
+    port:
+      Number(
+        process.env.DB_PORT ||
+        3306
+      ),
 
-    database: requireEnv('DB_NAME', 'markpulse'),
+
+    user:
+      requireEnv(
+        'DB_USER',
+        'root'
+      ),
+
+
+    password:
+      process.env.DB_PASSWORD ||
+      '',
+
+
+    database:
+      requireEnv(
+        'DB_NAME',
+        'markpulse'
+      ),
   },
 
+
+  /* =========================================================
+     JWT
+  ========================================================= */
 
   jwt: {
-    secret: requireEnv('JWT_SECRET'),
 
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    secret:
+      requireEnv(
+        'JWT_SECRET'
+      ),
+
+
+    expiresIn:
+      process.env.JWT_EXPIRES_IN ||
+      '7d',
   },
 
 
+  /* =========================================================
+     MARKET DATA
+  ========================================================= */
+
   /*
-   * Market data mode:
+   * Supported modes:
    *
-   * live -> attempts Groww API
-   * demo -> always uses demo market data
+   * live -> Uses Groww API
+   * demo -> Uses demo market data
    */
 
-  marketDataMode: (
-    process.env.MARKET_DATA_MODE || 'demo'
-  ).toLowerCase(),
+  marketDataMode:
+    (
+      process.env.MARKET_DATA_MODE ||
+      'demo'
+    ).toLowerCase(),
 
+
+  /* =========================================================
+     GROWW API
+  ========================================================= */
 
   /*
-   * Groww API configuration.
+   * Environment variables:
    *
-   * GROWW_API_KEY and GROWW_API_SECRET are used
-   * to generate an access token automatically.
+   * GROWW_API_KEY
+   * GROWW_API_SECRET
    */
 
   groww: {
-  baseUrl: 'https://api.groww.in/v1',
 
-  apiKey: process.env.GROW_API_KEY || '',
+    baseUrl:
+      'https://api.groww.in/v1',
 
-  apiSecret: process.env.GROW_API_SECRET || '',
-},
 
-  /*
-   * Background market polling.
-   */
+    apiKey:
+      process.env.GROWW_API_KEY ||
+      '',
 
-  enableBackgroundJob: (
-    process.env.ENABLE_BACKGROUND_JOB || 'false'
-  ).toLowerCase() === 'true',
+
+    apiSecret:
+      process.env.GROWW_API_SECRET ||
+      '',
+  },
+
+
+  /* =========================================================
+     BACKGROUND JOB
+  ========================================================= */
+
+  enableBackgroundJob:
+
+    (
+      process.env.ENABLE_BACKGROUND_JOB ||
+      'false'
+    ).toLowerCase() === 'true',
 };
 
 
