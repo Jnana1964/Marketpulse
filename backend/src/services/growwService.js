@@ -2,13 +2,17 @@ const axios = require('axios');
 
 const crypto = require('crypto');
 
+const config = require(
+  '../config/env'
+);
+
 
 /* =========================================================
-   GROWW CONFIGURATION
+   CONSTANTS
 ========================================================= */
 
 const GROW_BASE_URL =
-  'https://api.groww.in/v1';
+  config.groww.baseUrl;
 
 
 /* =========================================================
@@ -25,12 +29,11 @@ let tokenExpiry = null;
 ========================================================= */
 
 /**
- * Groww checksum format:
+ * Generate Groww checksum.
  *
- * SHA256(API_SECRET + TIMESTAMP)
- *
- * TIMESTAMP:
- * Epoch time in seconds
+ * SHA256(
+ *   API_SECRET + TIMESTAMP
+ * )
  */
 
 function generateChecksum(
@@ -43,8 +46,11 @@ function generateChecksum(
 
 
   return crypto
+
     .createHash('sha256')
+
     .update(input)
+
     .digest('hex');
 }
 
@@ -54,12 +60,15 @@ function generateChecksum(
 ========================================================= */
 
 /**
- * Generate a Groww API access token.
+ * Generate a Groww access token.
  *
- * Environment variables:
+ * POST:
  *
- * GROWW_API_KEY
- * GROWW_API_SECRET
+ * /v1/token/api/access
+ *
+ * Authorization:
+ *
+ * Bearer API_KEY
  */
 
 async function generateAccessToken() {
@@ -67,60 +76,49 @@ async function generateAccessToken() {
   try {
 
     const apiKey =
-      process.env.GROWW_API_KEY;
+      config.groww.apiKey;
 
 
     const apiSecret =
-      process.env.GROWW_API_SECRET;
+      config.groww.apiSecret;
 
 
-    /* -----------------------------------------------------
-       VALIDATE ENVIRONMENT VARIABLES
-    ----------------------------------------------------- */
+    /* -----------------------------------------------
+       VALIDATE CONFIGURATION
+    ------------------------------------------------ */
 
     if (!apiKey) {
 
-      const error =
-        new Error(
-          'GROWW_API_KEY is missing.'
-        );
-
-      error.code =
-        'GROWW_API_KEY_MISSING';
-
-
-      throw error;
+      throw new Error(
+        'GROWW_API_KEY is missing'
+      );
     }
 
 
     if (!apiSecret) {
 
-      const error =
-        new Error(
-          'GROWW_API_SECRET is missing.'
-        );
-
-      error.code =
-        'GROWW_API_SECRET_MISSING';
-
-
-      throw error;
+      throw new Error(
+        'GROWW_API_SECRET is missing'
+      );
     }
 
 
-    /* -----------------------------------------------------
-       GENERATE TIMESTAMP
-    ----------------------------------------------------- */
+    /* -----------------------------------------------
+       TIMESTAMP
+    ------------------------------------------------ */
 
     const timestamp =
+
       Math.floor(
         Date.now() / 1000
-      ).toString();
+      )
+
+        .toString();
 
 
-    /* -----------------------------------------------------
-       GENERATE CHECKSUM
-    ----------------------------------------------------- */
+    /* -----------------------------------------------
+       CHECKSUM
+    ------------------------------------------------ */
 
     const checksum =
       generateChecksum(
@@ -134,27 +132,34 @@ async function generateAccessToken() {
     );
 
 
-    /* -----------------------------------------------------
-       REQUEST ACCESS TOKEN
-    ----------------------------------------------------- */
+    /* -----------------------------------------------
+       REQUEST TOKEN
+    ------------------------------------------------ */
 
     const response =
+
       await axios.post(
 
         `${GROW_BASE_URL}/token/api/access`,
 
 
         {
+
           key_type:
             'approval',
 
-          checksum,
 
-          timestamp,
+          checksum:
+            checksum,
+
+
+          timestamp:
+            timestamp,
         },
 
 
         {
+
           headers: {
 
             Authorization:
@@ -180,26 +185,23 @@ async function generateAccessToken() {
       response.data;
 
 
-    console.log(
-      'Groww token response received.'
-    );
-
-
-    /* -----------------------------------------------------
+    /* -----------------------------------------------
        EXTRACT TOKEN
-    ----------------------------------------------------- */
+    ------------------------------------------------ */
 
     const token =
 
-      data?.token ||
+      data.token ||
 
-      data?.payload?.token;
+      data.payload?.token;
 
 
     if (!token) {
 
       console.error(
+
         'Unexpected Groww token response:',
+
         JSON.stringify(
           data,
           null,
@@ -208,42 +210,40 @@ async function generateAccessToken() {
       );
 
 
-      const error =
-        new Error(
-          'Groww did not return an access token.'
-        );
-
-
-      error.code =
-        'GROWW_TOKEN_MISSING';
-
-
-      throw error;
+      throw new Error(
+        'Groww did not return an access token'
+      );
     }
 
 
-    /* -----------------------------------------------------
+    /* -----------------------------------------------
        CACHE TOKEN
-    ----------------------------------------------------- */
+    ------------------------------------------------ */
 
     cachedToken =
       token;
 
 
     /*
-     * Cache temporarily.
+     * Keep token temporarily cached.
      *
-     * We will regenerate the token
-     * when the cache expires.
+     * This prevents generating a token
+     * for every API request.
      */
 
     tokenExpiry =
+
       Date.now() +
-      5 * 60 * 1000;
+
+      5 *
+
+      60 *
+
+      1000;
 
 
     console.log(
-      'Groww access token generated successfully.'
+      'Groww access token generated successfully'
     );
 
 
@@ -252,48 +252,32 @@ async function generateAccessToken() {
 
   } catch (error) {
 
-
     console.error(
-      'Groww token generation failed.'
+      'Groww token generation failed'
     );
 
 
     if (error.response) {
 
       console.error(
-        'Groww API response:',
+
+        'Groww response:',
+
         JSON.stringify(
+
           error.response.data,
+
           null,
+
           2
         )
       );
 
+    } else {
 
-      const providerError =
-        new Error(
-
-          error.response.data?.message ||
-
-          error.response.data?.error?.message ||
-
-          'Groww authentication failed.'
-        );
-
-
-      providerError.code =
-        error.response.data?.code ||
-
-        error.response.data?.error?.code ||
-
-        'GROWW_AUTH_ERROR';
-
-
-      providerError.status =
-        error.response.status;
-
-
-      throw providerError;
+      console.error(
+        error.message
+      );
     }
 
 
@@ -306,14 +290,7 @@ async function generateAccessToken() {
    GET ACCESS TOKEN
 ========================================================= */
 
-/**
- * Returns a cached token when available.
- *
- * Otherwise generates a new token.
- */
-
 async function getAccessToken() {
-
 
   if (
 
@@ -334,18 +311,10 @@ async function getAccessToken() {
 
 
 /* =========================================================
-   GET GROWW HTTP CLIENT
+   GET AUTHENTICATED CLIENT
 ========================================================= */
 
-/**
- * Returns an authenticated Axios client.
- *
- * The access token is automatically generated
- * when required.
- */
-
 async function getGrowwClient() {
-
 
   const token =
     await getAccessToken();
@@ -379,23 +348,6 @@ async function getGrowwClient() {
 
 
 /* =========================================================
-   CLEAR TOKEN CACHE
-========================================================= */
-
-/**
- * Useful if an API request returns
- * an authentication failure.
- */
-
-function clearTokenCache() {
-
-  cachedToken = null;
-
-  tokenExpiry = null;
-}
-
-
-/* =========================================================
    EXPORTS
 ========================================================= */
 
@@ -408,6 +360,4 @@ module.exports = {
   getAccessToken,
 
   getGrowwClient,
-
-  clearTokenCache,
 };
