@@ -1,92 +1,151 @@
 /**
  * Groww API integration.
  *
- * This is the ONLY module in the application that communicates
- * directly with the Groww REST API.
+ * This module is the ONLY module that directly communicates with Groww.
+ *
+ * Authentication flow:
+ *
+ * GROWW_API_KEY
+ *       +
+ * GROWW_API_SECRET
+ *       ↓
+ * Generate SHA256(secret + timestamp)
+ *       ↓
+ * POST /token/api/access
+ *       ↓
+ * Receive access token
+ *       ↓
+ * Use token for market-data requests
  */
 
 const axios = require('axios');
+const crypto = require('crypto');
+
 const config = require('../config/env');
 
+
 /* ============================================================
-   CUSTOM PROVIDER ERRORS
+   CUSTOM ERRORS
 ============================================================ */
 
 class ProviderError extends Error {
   constructor(message, code) {
     super(message);
+
     this.name = 'ProviderError';
     this.code = code;
   }
 }
 
+
 class ProviderConfigError extends ProviderError {
   constructor(message) {
     super(message, 'PROVIDER_CONFIG_ERROR');
+
     this.name = 'ProviderConfigError';
   }
 }
 
+
 class ProviderAuthError extends ProviderError {
   constructor(message) {
     super(message, 'PROVIDER_AUTH_ERROR');
+
     this.name = 'ProviderAuthError';
   }
 }
 
+
 class ProviderRateLimitError extends ProviderError {
   constructor(message) {
     super(message, 'PROVIDER_RATE_LIMIT');
+
     this.name = 'ProviderRateLimitError';
   }
 }
 
+
 class ProviderHttpError extends ProviderError {
   constructor(message, status) {
     super(message, 'PROVIDER_HTTP_ERROR');
+
     this.name = 'ProviderHttpError';
     this.status = status;
   }
 }
 
+
 class ProviderNetworkError extends ProviderError {
   constructor(message) {
     super(message, 'PROVIDER_NETWORK_ERROR');
+
     this.name = 'ProviderNetworkError';
   }
 }
 
+
 class ProviderResponseError extends ProviderError {
   constructor(message) {
     super(message, 'PROVIDER_RESPONSE_ERROR');
+
     this.name = 'ProviderResponseError';
   }
 }
 
 
 /* ============================================================
-   AXIOS CLIENT
+   ACCESS TOKEN CACHE
 ============================================================ */
 
-function client() {
-  if (!config.groww.authToken) {
+/**
+ * We cache the generated access token in memory.
+ *
+ * Render may restart the service at any time, which is fine:
+ * the application will simply generate a new token.
+ */
+
+let cachedAccessToken = null;
+let tokenExpiryTime = 0;
+
+
+/* ============================================================
+   CONFIGURATION CHECK
+============================================================ */
+
+function ensureCredentials() {
+  if (!config.groww.apiKey) {
     throw new ProviderConfigError(
-      'GROWW_API_AUTH_TOKEN is not configured.'
+      'GROWW_API_KEY is not configured.'
     );
   }
 
-  return axios.create({
-    baseURL: config.groww.baseUrl,
-    timeout: 10000,
+  if (!config.groww.apiSecret) {
+    throw new ProviderConfigError(
+      'GROWW_API_SECRET is not configured.'
+    );
+  }
+}
 
-    headers: {
-      Accept: 'application/json',
 
-      Authorization: `Bearer ${config.groww.authToken}`,
+/* ============================================================
+   CHECKSUM GENERATION
+============================================================ */
 
-      'X-API-VERSION': '1.0',
-    },
-  });
+/**
+ * Groww checksum:
+ *
+ * SHA256(API_SECRET + TIMESTAMP)
+ *
+ * Timestamp must be epoch seconds.
+ */
+
+function generateChecksum(secret, timestamp) {
+  const input = `${secret}${timestamp}`;
+
+  return crypto
+    .createHash('sha256')
+    .update(input)
+    .digest('hex');
 }
 
 
@@ -95,14 +154,14 @@ function client() {
 ============================================================ */
 
 function translateError(err, context) {
-  // Do not translate our own errors again.
   if (err instanceof ProviderError) {
     return err;
   }
 
-  // HTTP response received.
+
   if (err.response) {
     const status = err.response.status;
+
 
     if (status === 401 || status === 403) {
       return new ProviderAuthError(
@@ -110,26 +169,34 @@ function translateError(err, context) {
       );
     }
 
+
     if (status === 429) {
       return new ProviderRateLimitError(
-        `Groww API rate limit hit while ${context}.`
+        `Groww API rate limit reached while ${context}.`
       );
     }
 
+
+    const providerMessage =
+      err.response.data?.message ||
+      err.response.data?.error?.message ||
+      `Groww API returned HTTP ${status}.`;
+
+
     return new ProviderHttpError(
-      `Groww API returned HTTP ${status} while ${context}.`,
+      `${providerMessage} (${context})`,
       status
     );
   }
 
-  // Request was sent but no response was received.
+
   if (err.request) {
     return new ProviderNetworkError(
       `No response received from Groww API while ${context}.`
     );
   }
 
-  // Other unexpected errors.
+
   return new ProviderResponseError(
     `Unexpected error while ${context}: ${err.message}`
   );
@@ -137,389 +204,173 @@ function translateError(err, context) {
 
 
 /* ============================================================
-   RESPONSE VALIDATION
+   ACCESS TOKEN GENERATION
 ============================================================ */
 
-function getSuccessfulPayload(data, context) {
-  if (!data || typeof data !== 'object') {
-    throw new ProviderResponseError(
-      `Empty or invalid response from Groww while ${context}.`
+async function generateAccessToken() {
+  ensureCredentials();
+
+
+  try {
+    const timestamp = Math.floor(
+      Date.now() / 1000
+    ).toString();
+
+
+    const checksum = generateChecksum(
+      config.groww.apiSecret,
+      timestamp
+    );
+
+
+    const response = await axios.post(
+      `${config.groww.baseUrl}/token/api/access`,
+
+      {
+        key_type: 'approval',
+
+        checksum,
+
+        timestamp,
+      },
+
+      {
+        timeout: 10000,
+
+        headers: {
+          Authorization: `Bearer ${config.groww.apiKey}`,
+
+          'Content-Type': 'application/json',
+
+          Accept: 'application/json',
+        },
+      }
+    );
+
+
+    const data = response.data;
+
+
+    /*
+     * Groww documents:
+     *
+     * {
+     *   token: "...",
+     *   expiry: "...",
+     *   ...
+     * }
+     */
+
+    if (!data || !data.token) {
+      throw new ProviderResponseError(
+        'Groww access token response did not contain a token.'
+      );
+    }
+
+
+    cachedAccessToken = data.token;
+
+
+    /*
+     * If Groww returns an expiry timestamp,
+     * use it.
+     *
+     * Otherwise cache temporarily for safety.
+     */
+
+    if (data.expiry) {
+      const expiryMs = new Date(
+        data.expiry
+      ).getTime();
+
+
+      if (
+        Number.isFinite(expiryMs) &&
+        expiryMs > Date.now()
+      ) {
+        /*
+         * Refresh 60 seconds before expiry.
+         */
+
+        tokenExpiryTime =
+          expiryMs - 60 * 1000;
+      } else {
+        tokenExpiryTime =
+          Date.now() + 5 * 60 * 1000;
+      }
+    } else {
+      tokenExpiryTime =
+        Date.now() + 5 * 60 * 1000;
+    }
+
+
+    return cachedAccessToken;
+
+  } catch (err) {
+
+    cachedAccessToken = null;
+
+    tokenExpiryTime = 0;
+
+
+    throw translateError(
+      err,
+      'generating Groww access token'
     );
   }
+}
 
-  if (data.status !== 'SUCCESS') {
-    const errorMessage =
-      data.error?.message ||
-      data.message ||
-      `Groww API request failed while ${context}.`;
 
-    throw new ProviderResponseError(errorMessage);
-  }
+/* ============================================================
+   GET VALID ACCESS TOKEN
+============================================================ */
+
+async function getAccessToken() {
+
+  /*
+   * Reuse cached token if valid.
+   */
 
   if (
-    !Object.prototype.hasOwnProperty.call(data, 'payload') ||
-    data.payload === null ||
-    data.payload === undefined
+    cachedAccessToken &&
+    Date.now() < tokenExpiryTime
   ) {
-    throw new ProviderResponseError(
-      `Groww API returned no payload while ${context}.`
-    );
+    return cachedAccessToken;
   }
 
-  return data.payload;
+
+  return generateAccessToken();
 }
 
 
 /* ============================================================
-   OHLC PARSER
+   AUTHENTICATED AXIOS CLIENT
 ============================================================ */
 
-/**
- * Groww documentation may represent OHLC as an object-like string.
- *
- * This helper supports:
- *
- * 1. Normal object:
- *    { open: 100, high: 110, low: 95, close: 105 }
- *
- * 2. JSON string:
- *    '{"open":100,"high":110,"low":95,"close":105}'
- *
- * 3. Object-like string:
- *    '{open: 100,high: 110,low: 95,close: 105}'
- */
+async function client() {
 
-function parseOhlc(ohlc) {
-  if (!ohlc) {
-    return {};
-  }
-
-  // Already an object.
-  if (typeof ohlc === 'object') {
-    return {
-      open: Number.isFinite(Number(ohlc.open))
-        ? Number(ohlc.open)
-        : null,
-
-      high: Number.isFinite(Number(ohlc.high))
-        ? Number(ohlc.high)
-        : null,
-
-      low: Number.isFinite(Number(ohlc.low))
-        ? Number(ohlc.low)
-        : null,
-
-      close: Number.isFinite(Number(ohlc.close))
-        ? Number(ohlc.close)
-        : null,
-    };
-  }
-
-  // Not a string.
-  if (typeof ohlc !== 'string') {
-    return {};
-  }
-
-  // Try normal JSON first.
-  try {
-    const parsed = JSON.parse(ohlc);
-
-    if (parsed && typeof parsed === 'object') {
-      return parseOhlc(parsed);
-    }
-  } catch (error) {
-    // Continue to regex parsing.
-  }
-
-  // Parse object-like format:
-  // {open: 149.50,high: 150.50,low: 148.50,close: 149.50}
-
-  const getValue = (key) => {
-    const regex = new RegExp(
-      `${key}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`,
-      'i'
-    );
-
-    const match = ohlc.match(regex);
-
-    if (!match) {
-      return null;
-    }
-
-    const value = Number(match[1]);
-
-    return Number.isFinite(value)
-      ? value
-      : null;
-  };
-
-  return {
-    open: getValue('open'),
-    high: getValue('high'),
-    low: getValue('low'),
-    close: getValue('close'),
-  };
-}
+  const accessToken =
+    await getAccessToken();
 
 
-/* ============================================================
-   GET QUOTE
-============================================================ */
+  return axios.create({
 
-/**
- * GET /live-data/quote
- *
- * Returns complete live market information for one instrument.
- */
+    baseURL: config.groww.baseUrl,
 
-async function getQuote({
-  exchange,
-  segment,
-  symbol,
-}) {
-  try {
-    const { data } = await client().get(
-      '/live-data/quote',
-      {
-        params: {
-          exchange,
-          segment,
-          trading_symbol: symbol,
-        },
-      }
-    );
+    timeout: 10000,
 
-    const payload = getSuccessfulPayload(
-      data,
-      `fetching quote for ${symbol}`
-    );
+    headers: {
 
-    const lastPrice = Number(payload.last_price);
+      Accept: 'application/json',
 
-    if (!Number.isFinite(lastPrice)) {
-      throw new ProviderResponseError(
-        `Malformed quote response for ${symbol}: last_price is missing.`
-      );
-    }
+      Authorization:
+        `Bearer ${accessToken}`,
 
-    return normalizeQuote(
-      symbol,
-      exchange,
-      payload
-    );
-  } catch (err) {
-    throw translateError(
-      err,
-      `fetching quote for ${symbol}`
-    );
-  }
-}
+      'X-API-VERSION': '1.0',
 
+    },
 
-/* ============================================================
-   GET LTP
-============================================================ */
-
-/**
- * GET /live-data/ltp
- *
- * Fetches latest prices for up to 50 instruments.
- */
-
-async function getLtp({
-  segment,
-  exchangeSymbols,
-}) {
-  try {
-    if (
-      !Array.isArray(exchangeSymbols) ||
-      exchangeSymbols.length === 0
-    ) {
-      throw new ProviderResponseError(
-        'exchangeSymbols must be a non-empty array.'
-      );
-    }
-
-    const { data } = await client().get(
-      '/live-data/ltp',
-      {
-        params: {
-          segment,
-
-          exchange_symbols:
-            exchangeSymbols.join(','),
-        },
-      }
-    );
-
-    const payload = getSuccessfulPayload(
-      data,
-      'fetching LTP batch'
-    );
-
-    if (
-      !payload ||
-      typeof payload !== 'object'
-    ) {
-      throw new ProviderResponseError(
-        'Malformed LTP response from Groww.'
-      );
-    }
-
-    return payload;
-  } catch (err) {
-    throw translateError(
-      err,
-      'fetching LTP batch'
-    );
-  }
-}
-
-
-/* ============================================================
-   GET OHLC
-============================================================ */
-
-/**
- * GET /live-data/ohlc
- *
- * Fetches current OHLC values for up to 50 instruments.
- */
-
-async function getOhlc({
-  segment,
-  exchangeSymbols,
-}) {
-  try {
-    if (
-      !Array.isArray(exchangeSymbols) ||
-      exchangeSymbols.length === 0
-    ) {
-      throw new ProviderResponseError(
-        'exchangeSymbols must be a non-empty array.'
-      );
-    }
-
-    const { data } = await client().get(
-      '/live-data/ohlc',
-      {
-        params: {
-          segment,
-
-          exchange_symbols:
-            exchangeSymbols.join(','),
-        },
-      }
-    );
-
-    const payload = getSuccessfulPayload(
-      data,
-      'fetching OHLC batch'
-    );
-
-    if (
-      !payload ||
-      typeof payload !== 'object'
-    ) {
-      throw new ProviderResponseError(
-        'Malformed OHLC response from Groww.'
-      );
-    }
-
-    return payload;
-  } catch (err) {
-    throw translateError(
-      err,
-      'fetching OHLC batch'
-    );
-  }
-}
-
-
-/* ============================================================
-   GET HISTORICAL CANDLES
-============================================================ */
-
-/**
- * GET /historical/candle/range
- *
- * Fetches historical OHLC candle data.
- */
-
-async function getHistoricalCandles({
-  exchange,
-  segment,
-  symbol,
-  startTime,
-  endTime,
-  intervalInMinutes,
-}) {
-  try {
-    const { data } = await client().get(
-      '/historical/candle/range',
-      {
-        params: {
-          exchange,
-          segment,
-          trading_symbol: symbol,
-          start_time: startTime,
-          end_time: endTime,
-          interval_in_minutes:
-            intervalInMinutes,
-        },
-      }
-    );
-
-    const payload = getSuccessfulPayload(
-      data,
-      `fetching historical candles for ${symbol}`
-    );
-
-    if (
-      !payload ||
-      !Array.isArray(payload.candles)
-    ) {
-      throw new ProviderResponseError(
-        `Malformed historical candle response for ${symbol}.`
-      );
-    }
-
-    return payload.candles
-      .filter(
-        (candle) =>
-          Array.isArray(candle) &&
-          candle.length >= 6
-      )
-      .map((candle) => {
-        const timestamp =
-          Number(candle[0]);
-
-        return {
-          timestamp:
-            Number.isFinite(timestamp)
-              ? new Date(
-                  timestamp * 1000
-                ).toISOString()
-              : null,
-
-          open: Number(candle[1]),
-
-          high: Number(candle[2]),
-
-          low: Number(candle[3]),
-
-          close: Number(candle[4]),
-
-          volume: Number(candle[5]),
-        };
-      });
-
-  } catch (err) {
-    throw translateError(
-      err,
-      `fetching historical candles for ${symbol}`
-    );
-  }
+  });
 }
 
 
@@ -527,60 +378,319 @@ async function getHistoricalCandles({
    NORMALIZE QUOTE
 ============================================================ */
 
-/**
- * Converts Groww's response into MarkPulse's
- * internal market snapshot format.
- */
-
 function normalizeQuote(
   symbol,
   exchange,
   raw
 ) {
-  const ohlc = parseOhlc(raw.ohlc);
 
-  const lastPrice = Number(raw.last_price);
+  /*
+   * Some API responses are wrapped inside
+   * a payload object.
+   */
+
+  const quoteData =
+    raw?.payload || raw;
+
+
+  if (
+    !quoteData ||
+    typeof quoteData.last_price !== 'number'
+  ) {
+
+    throw new ProviderResponseError(
+      `Malformed quote response for ${symbol}.`
+    );
+
+  }
+
 
   return {
+
     symbol,
 
     exchange,
 
     price:
-      Number.isFinite(lastPrice)
-        ? lastPrice
-        : null,
+      quoteData.last_price,
 
     previousClose:
-      ohlc.close,
+      quoteData.ohlc?.close ??
+      quoteData.previous_close ??
+      null,
 
     open:
-      ohlc.open,
+      quoteData.ohlc?.open ??
+      null,
 
     high:
-      ohlc.high,
+      quoteData.ohlc?.high ??
+      null,
 
     low:
-      ohlc.low,
+      quoteData.ohlc?.low ??
+      null,
 
     volume:
-      raw.volume !== undefined &&
-      raw.volume !== null &&
-      Number.isFinite(Number(raw.volume))
-        ? Number(raw.volume)
-        : null,
+      quoteData.volume ??
+      quoteData.total_volume ??
+      null,
 
     timestamp:
-      raw.last_trade_time
-        ? new Date(
-            Number(raw.last_trade_time)
-          ).toISOString()
-        : new Date().toISOString(),
+      new Date().toISOString(),
 
     source: 'groww',
 
     isLive: true,
+
   };
+
+}
+
+
+/* ============================================================
+   GET QUOTE
+============================================================ */
+
+async function getQuote({
+  exchange,
+  segment = 'CASH',
+  symbol,
+}) {
+
+  try {
+
+    const apiClient =
+      await client();
+
+
+    const response =
+      await apiClient.get(
+        '/live-data/quote',
+        {
+          params: {
+
+            exchange,
+
+            segment,
+
+            trading_symbol:
+              symbol,
+
+          },
+        }
+      );
+
+
+    return normalizeQuote(
+      symbol,
+      exchange,
+      response.data
+    );
+
+  } catch (err) {
+
+    throw translateError(
+      err,
+      `fetching quote for ${symbol}`
+    );
+
+  }
+
+}
+
+
+/* ============================================================
+   GET LTP
+============================================================ */
+
+async function getLtp({
+  segment = 'CASH',
+  exchangeSymbols,
+}) {
+
+  try {
+
+    const apiClient =
+      await client();
+
+
+    const response =
+      await apiClient.get(
+        '/live-data/ltp',
+        {
+          params: {
+
+            segment,
+
+            exchange_symbols:
+              exchangeSymbols.join(','),
+
+          },
+        }
+      );
+
+
+    return response.data;
+
+  } catch (err) {
+
+    throw translateError(
+      err,
+      'fetching Groww LTP data'
+    );
+
+  }
+
+}
+
+
+/* ============================================================
+   GET OHLC
+============================================================ */
+
+async function getOhlc({
+  segment = 'CASH',
+  exchangeSymbols,
+}) {
+
+  try {
+
+    const apiClient =
+      await client();
+
+
+    const response =
+      await apiClient.get(
+        '/live-data/ohlc',
+        {
+          params: {
+
+            segment,
+
+            exchange_symbols:
+              exchangeSymbols.join(','),
+
+          },
+        }
+      );
+
+
+    return response.data;
+
+  } catch (err) {
+
+    throw translateError(
+      err,
+      'fetching Groww OHLC data'
+    );
+
+  }
+
+}
+
+
+/* ============================================================
+   GET HISTORICAL CANDLES
+============================================================ */
+
+async function getHistoricalCandles({
+  exchange,
+  segment = 'CASH',
+  symbol,
+  startTime,
+  endTime,
+  intervalInMinutes,
+}) {
+
+  try {
+
+    const apiClient =
+      await client();
+
+
+    const response =
+      await apiClient.get(
+        '/historical/candle/range',
+        {
+          params: {
+
+            exchange,
+
+            segment,
+
+            trading_symbol:
+              symbol,
+
+            start_time:
+              startTime,
+
+            end_time:
+              endTime,
+
+            interval_in_minutes:
+              intervalInMinutes,
+
+          },
+        }
+      );
+
+
+    const responseData =
+      response.data?.payload ||
+      response.data;
+
+
+    const rawCandles =
+      responseData?.candles;
+
+
+    if (
+      !Array.isArray(rawCandles)
+    ) {
+
+      throw new ProviderResponseError(
+        `Malformed historical candle response for ${symbol}.`
+      );
+
+    }
+
+
+    return rawCandles.map(
+      (candle) => ({
+
+        timestamp:
+          new Date(
+            Number(candle[0]) * 1000
+          ).toISOString(),
+
+        open:
+          candle[1],
+
+        high:
+          candle[2],
+
+        low:
+          candle[3],
+
+        close:
+          candle[4],
+
+        volume:
+          candle[5] ?? null,
+
+      })
+    );
+
+  } catch (err) {
+
+    throw translateError(
+      err,
+      `fetching historical candles for ${symbol}`
+    );
+
+  }
+
 }
 
 
@@ -589,6 +699,7 @@ function normalizeQuote(
 ============================================================ */
 
 module.exports = {
+
   getQuote,
 
   getLtp,
@@ -596,6 +707,8 @@ module.exports = {
   getOhlc,
 
   getHistoricalCandles,
+
+  getAccessToken,
 
   ProviderError,
 
@@ -610,4 +723,5 @@ module.exports = {
   ProviderNetworkError,
 
   ProviderResponseError,
+
 };
